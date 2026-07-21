@@ -76,7 +76,7 @@ nmap -A -p- 192.168.1.37
 - A single file `trytofind.jpg` (1,093,656 bytes) was visible on the FTP share.
 - The server was Debian 10 running kernel 4.19.0-14-amd64.
 
-![Nmap -A -p- scan — ports 21 (FTP), 22 (SSH), 80 (HTTP) open](images-moneybox/02-nmap.png)
+![Nmap -A -p- scan — ports 21 (FTP), 22 (SSH), 80 (HTTP) open](images-moneybox/images-moneybox/02-nmap.png)
 
 ---
 
@@ -110,11 +110,11 @@ Navigating to `http://192.168.1.37/S3cr3t-T3xt/` revealed another HTML comment:
 
 This key would later be relevant for the steganography phase.
 
-![dirb enumeration — /blogs/ directory found](images-moneybox/03-dirb-web.png)
+![dirb enumeration — /blogs/ directory found](images-moneybox/images-moneybox/03-dirb-web.png)
 
-![HTML source: hidden directory hint S3cr3t-T3xt](images-moneybox/19-source-hint.png)
+![HTML source: hidden directory hint S3cr3t-T3xt](images-moneybox/images-moneybox/19-source-hint.png)
 
-![S3cr3t-T3xt page — secret key 3xtr4ctd4t4](images-moneybox/20-secret-key.png)
+![S3cr3t-T3xt page — secret key 3xtr4ctd4t4](images-moneybox/images-moneybox/20-secret-key.png)
 
 ---
 
@@ -131,7 +131,7 @@ ftp> get trytofind.jpg
 
 The filename itself was a hint: `trytofind.jpg` — suggesting hidden data needed to be found.
 
-![Anonymous FTP login — retrieving trytofind.jpg](images-moneybox/04-ftp-anon.png)
+![Anonymous FTP login — retrieving trytofind.jpg](images-moneybox/images-moneybox/04-ftp-anon.png)
 
 ---
 
@@ -169,13 +169,13 @@ Don't Underestimate it.......
 - A username was revealed: **`renu`**
 - The password was explicitly described as **"too weak"** — confirming a brute-force attack would succeed
 
-![StegSeek cracking attempt — seed 22f61b09 found](images-moneybox/21-stegseek.png)
+![StegSeek cracking attempt — seed 22f61b09 found](images-moneybox/images-moneybox/21-stegseek.png)
 
-![steghide extraction with passphrase 3xtr4ctd4t4](images-moneybox/22-steghide-extract.png)
+![steghide extraction with passphrase 3xtr4ctd4t4](images-moneybox/images-moneybox/22-steghide-extract.png)
 
-![steghide output — extracted data.txt](images-moneybox/05-steghide.png)
+![steghide output — extracted data.txt](images-moneybox/images-moneybox/05-steghide.png)
 
-![data.txt contents — reveals username renu and weak password warning](images-moneybox/06-data-txt.png)
+![data.txt contents — reveals username renu and weak password warning](images-moneybox/images-moneybox/06-data-txt.png)
 
 ---
 
@@ -198,7 +198,7 @@ Hydra issued a warning about SSH connection limits (`[WARNING] Many SSH configur
 
 The password was a predictable numeric sequence (`987654321`) — confirming the "too weak" warning from `data.txt`. No alpha, special, or mixed-case characters.
 
-![Hydra brute-force: renu:987654321 via rockyou.txt](images-moneybox/07-hydra.png)
+![Hydra brute-force: renu:987654321 via rockyou.txt](images-moneybox/images-moneybox/07-hydra.png)
 
 ---
 
@@ -230,11 +230,11 @@ You Got it User1 Flag
 
 **User1 Flag:** `us3r1{F14g:0ku74tbd3777y4}`
 
-![SSH login as renu — connected to MoneyBox](images-moneybox/08-ssh-renu-login.png)
+![SSH login as renu — connected to MoneyBox](images-moneybox/images-moneybox/08-ssh-renu-login.png)
 
-![user1.txt flag — us3r1{F14g:0ku74tbd3777y4}](images-moneybox/09-user1-flag.png)
+![user1.txt flag — us3r1{F14g:0ku74tbd3777y4}](images-moneybox/images-moneybox/09-user1-flag.png)
 
-![System reconnaissance: id and uname output](images-moneybox/10-id-uname.png)
+![System reconnaissance: id and uname output](images-moneybox/images-moneybox/10-id-uname.png)
 
 ---
 
@@ -276,15 +276,15 @@ User lily may run the following commands on MoneyBox:
 
 Lily had **unrestricted sudo access** with no password requirement — any command could be run as root.
 
-![Navigating /home/lily — world-readable home directory](images-moneybox/11-lily-home-ls.png)
+![Navigating /home/lily — world-readable home directory](images-moneybox/images-moneybox/11-lily-home-ls.png)
 
-![authorized_keys — contains renu's public key](images-moneybox/12-authorized-keys.png)
+![authorized_keys — contains renu's public key](images-moneybox/images-moneybox/12-authorized-keys.png)
 
-![SSH to lily@127.0.0.1 — passwordless login](images-moneybox/13-ssh-lily.png)
+![SSH to lily@127.0.0.1 — passwordless login](images-moneybox/images-moneybox/13-ssh-lily.png)
 
-![user2.txt flag — us3r{F14g:tr5827r5wu6nklao}](images-moneybox/14-user2-flag.png)
+![user2.txt flag — us3r{F14g:tr5827r5wu6nklao}](images-moneybox/images-moneybox/14-user2-flag.png)
 
-![sudo -l — (ALL : ALL) NOPASSWD: ALL](images-moneybox/15-sudo-l.png)
+![sudo -l — (ALL : ALL) NOPASSWD: ALL](images-moneybox/images-moneybox/15-sudo-l.png)
 
 ---
 
@@ -318,15 +318,15 @@ Finally The Root Flag
 
 **Root Flag:** `r00t{H4ckth3p14n3t}`
 
-![Perl privilege escalation — sudo perl spawning root shell](images-moneybox/16-perl-escalation.png)
+![Perl privilege escalation — sudo perl spawning root shell](images-moneybox/images-moneybox/16-perl-escalation.png)
 
-![whoami confirms root](images-moneybox/17-root-shell.png)
+![whoami confirms root](images-moneybox/images-moneybox/17-root-shell.png)
 
-![sudo perl -e exec /bin/sh — full escalation command](images-moneybox/23-sudo-perl.png)
+![sudo perl -e exec /bin/sh — full escalation command](images-moneybox/images-moneybox/23-sudo-perl.png)
 
-![Root flag — r00t{H4ckth3p14n3t}](images-moneybox/24-root-proof.png)
+![Root flag — r00t{H4ckth3p14n3t}](images-moneybox/images-moneybox/24-root-proof.png)
 
-![Full root flag output with congratulations message](images-moneybox/18-root-flag.png)
+![Full root flag output with congratulations message](images-moneybox/images-moneybox/18-root-flag.png)
 
 ---
 
