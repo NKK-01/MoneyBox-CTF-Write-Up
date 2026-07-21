@@ -49,7 +49,7 @@ IP            At MAC Address     Count   MAC Vendor
 
 The MAC address `08:00:27:*` confirmed it as a VirtualBox VM — the target was `192.168.1.37`.
 
-![netdiscover ARP scan — target IP identified as 192.168.1.37](images-moneybox/01-netdiscover.png)
+![netdiscover ARP scan — target IP identified as 192.168.1.37](images-moneybox/images-moneybox/01-netdiscover.png)
 
 ---
 
