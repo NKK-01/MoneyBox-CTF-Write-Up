@@ -69,7 +69,7 @@ The challenge unfolds in multiple phases:
 
 First, identify the target machine's IP address using ARP discovery:
 
-![Netdiscover Output - Identifying Target IP](01-netdiscover-target-discovery.png)
+![Netdiscover Output - Identifying Target IP](images-moneybox/01-netdiscover-target-discovery.png.png)
 
 **Command Used:**
 ```bash
@@ -99,7 +99,7 @@ nmap -A -p- 192.168.1.29
 
 Navigate to the web server and discover the landing page:
 
-![MoneyBox Homepage](03-moneybox-homepage.png)
+![MoneyBox Homepage](images-moneybox/03-moneybox-homepage.png)
 
 The homepage displays a message from "I'm T0m-H4ck3r" indicating this box was previously hacked and hints toward finding additional directories.
 
@@ -107,7 +107,7 @@ The homepage displays a message from "I'm T0m-H4ck3r" indicating this box was pr
 
 Use DIRB to enumerate web directories:
 
-![DIRB Web Directory Enumeration](04-dirb-directory-enumeration.png)
+![DIRB Web Directory Enumeration](images-moneybox/04-dirb-directory-enumeration.png)
 
 **Command Used:**
 ```bash
@@ -130,7 +130,7 @@ dirb http://192.168.1.29/
 
 Connect to FTP with anonymous credentials:
 
-![FTP Connection and File Retrieval](06-ftp-file-retrieval.png)
+![FTP Connection and File Retrieval](images-moneybox/06-ftp-file-retrieval.png)
 
 **Commands:**
 ```bash
@@ -146,7 +146,7 @@ The file `trytofind.jpg` (1.06 MiB) contains embedded data using steganography.
 
 Use StegSeek to identify the steganography seed:
 
-![StegSeek Steganography Detection](07-stegseek-detection.png)
+![StegSeek Steganography Detection](images-moneybox/07-stegseek-detection.png)
 
 **Command:**
 ```bash
@@ -157,8 +157,6 @@ stegseek --seed trytofind.jpg
 
 Extract the hidden data using Steghide:
 
-![Steghide Data Extraction](08-steghide-extraction.png)
-
 **Command:**
 ```bash
 steghide --extract -sf trytofind.jpg
@@ -166,7 +164,7 @@ steghide --extract -sf trytofind.jpg
 
 #### 1.3 Analyze Extracted Data
 
-![Extracted Steganographic Message](09-extracted-data-message.png)
+![Extracted Steganographic Message](images-moneybox/09-extracted-data-message.png)
 
 **Extracted Content:**
 ```
@@ -186,7 +184,7 @@ Don't Underestimate it.......
 
 Use Hydra to crack the SSH password for user "renu":
 
-![Hydra SSH Brute Force Attack](10-hydra-ssh-bruteforce.png)
+![Hydra SSH Brute Force Attack](images-moneybox/10-hydra-ssh-bruteforce.png)
 
 **Command:**
 ```bash
@@ -202,7 +200,7 @@ hydra -l renu -P /usr/share/wordlists/rockyou.txt.gz 192.168.1.29 ssh
 
 #### 3.1 Establish SSH Connection
 
-![SSH Login as renu User](11-ssh-login-user1-flag.png)
+![SSH Login as renu User](images-moneybox/11-ssh-login-user1-flag.png)
 
 **Command:**
 ```bash
@@ -214,7 +212,7 @@ ssh renu@192.168.1.29
 
 After logging in, locate the first flag:
 
-![User1 Flag Captured](Screenshot_2026-07-21_230042.png)
+![User1 Flag Captured](images-moneybox/12-user2-flag-discovery.png.png)
 
 **Command:**
 ```bash
@@ -230,7 +228,7 @@ us3r1{F14g:0ku74tbd3777y4}
 
 Explore the system to find additional users:
 
-![Exploring /home Directory for Other Users](13-ssh-authorized-keys.png)
+![Exploring /home Directory for Other Users](images-moneybox/13-ssh-authorized-keys.png)
 
 **Commands:**
 ```bash
@@ -252,8 +250,6 @@ us3r{F14g:tr5827r5wu6nklao}
 
 Examine the SSH directory of user "lily":
 
-![Authorized Keys Access](14-authorized-keys-file.png)
-
 The authorized_keys file contains the public key for user "renu", allowing SSH access as "lily" without requiring a password.
 
 #### 4.2 Switch to lily User
@@ -267,7 +263,7 @@ ssh lily@127.0.0.1
 
 Determine what commands "lily" can run with elevated privileges:
 
-![Sudo Permissions for lily User](15-sudo-permissions-perl.png)
+![Sudo Permissions for lily User](images-moneybox/15-sudo-permissions-perl.png)
 
 **Command:**
 ```bash
@@ -286,7 +282,7 @@ The user "lily" can run Perl without a password as root—a dangerous privilege 
 
 Leverage Perl to execute a shell with root privileges:
 
-![Perl Privilege Escalation to Root](16-perl-privilege-escalation.png)
+![Perl Privilege Escalation to Root](images-moneybox/16-perl-privilege-escalation.png)
 
 **Exploit Command:**
 ```bash
