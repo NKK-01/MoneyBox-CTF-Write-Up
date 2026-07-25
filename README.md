@@ -69,7 +69,7 @@ The challenge unfolds in multiple phases:
 
 First, identify the target machine's IP address using ARP discovery:
 
-![Netdiscover Output - Identifying Target IP](images-moneybox/01-netdiscover-target-discovery.png.png)
+![Netdiscover Output - Identifying Target IP](images-moneybox/01-netdiscover-target-discovery.png)
 
 **Command Used:**
 ```bash
@@ -82,7 +82,7 @@ netdiscover
 
 Perform a comprehensive port scan to identify running services:
 
-![Nmap Full Port Scan Results](02-nmap-port-scan.png)
+![Nmap Full Port Scan Results](images-moneybox/02-nmap-port-scan.png)
 
 **Command Used:**
 ```bash
@@ -212,7 +212,7 @@ ssh renu@192.168.1.29
 
 After logging in, locate the first flag:
 
-![User1 Flag Captured](images-moneybox/12-user2-flag-discovery.png.png)
+![User1 Flag Captured](images-moneybox/12-user2-flag-discovery.png)
 
 **Command:**
 ```bash
