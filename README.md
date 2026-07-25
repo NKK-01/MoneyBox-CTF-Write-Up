@@ -69,7 +69,7 @@ The challenge unfolds in multiple phases:
 
 First, identify the target machine's IP address using ARP discovery:
 
-![Netdiscover Output - Identifying Target IP](Screenshot_2026-07-21_215955.png)
+![Netdiscover Output - Identifying Target IP](01-netdiscover-target-discovery.png)
 
 **Command Used:**
 ```bash
@@ -82,7 +82,7 @@ netdiscover
 
 Perform a comprehensive port scan to identify running services:
 
-![Nmap Full Port Scan Results](Screenshot_2026-07-21_220226.png)
+![Nmap Full Port Scan Results](02-nmap-port-scan.png)
 
 **Command Used:**
 ```bash
@@ -99,7 +99,7 @@ nmap -A -p- 192.168.1.29
 
 Navigate to the web server and discover the landing page:
 
-![MoneyBox Homepage](Screenshot_2026-07-21_220428.png)
+![MoneyBox Homepage](03-moneybox-homepage.png)
 
 The homepage displays a message from "I'm T0m-H4ck3r" indicating this box was previously hacked and hints toward finding additional directories.
 
@@ -107,7 +107,7 @@ The homepage displays a message from "I'm T0m-H4ck3r" indicating this box was pr
 
 Use DIRB to enumerate web directories:
 
-![DIRB Web Directory Enumeration](Screenshot_2026-07-21_220931.png)
+![DIRB Web Directory Enumeration](04-dirb-directory-enumeration.png)
 
 **Command Used:**
 ```bash
@@ -130,7 +130,7 @@ dirb http://192.168.1.29/
 
 Connect to FTP with anonymous credentials:
 
-![FTP Connection and File Retrieval](Screenshot_2026-07-21_225805.png)
+![FTP Connection and File Retrieval](06-ftp-file-retrieval.png)
 
 **Commands:**
 ```bash
@@ -146,7 +146,7 @@ The file `trytofind.jpg` (1.06 MiB) contains embedded data using steganography.
 
 Use StegSeek to identify the steganography seed:
 
-![StegSeek Steganography Detection](Screenshot_2026-07-21_225851.png)
+![StegSeek Steganography Detection](07-stegseek-detection.png)
 
 **Command:**
 ```bash
@@ -157,7 +157,7 @@ stegseek --seed trytofind.jpg
 
 Extract the hidden data using Steghide:
 
-![Steghide Data Extraction](Screenshot_2026-07-21_225946.png)
+![Steghide Data Extraction](08-steghide-extraction.png)
 
 **Command:**
 ```bash
@@ -166,7 +166,7 @@ steghide --extract -sf trytofind.jpg
 
 #### 1.3 Analyze Extracted Data
 
-![Extracted Steganographic Message](Screenshot_2026-07-21_225827.png)
+![Extracted Steganographic Message](09-extracted-data-message.png)
 
 **Extracted Content:**
 ```
@@ -186,7 +186,7 @@ Don't Underestimate it.......
 
 Use Hydra to crack the SSH password for user "renu":
 
-![Hydra SSH Brute Force Attack](Screenshot_2026-07-21_225920.png)
+![Hydra SSH Brute Force Attack](10-hydra-ssh-bruteforce.png)
 
 **Command:**
 ```bash
@@ -202,7 +202,7 @@ hydra -l renu -P /usr/share/wordlists/rockyou.txt.gz 192.168.1.29 ssh
 
 #### 3.1 Establish SSH Connection
 
-![SSH Login as renu User](Screenshot_2026-07-21_230013.png)
+![SSH Login as renu User](11-ssh-login-user1-flag.png)
 
 **Command:**
 ```bash
@@ -230,7 +230,7 @@ us3r1{F14g:0ku74tbd3777y4}
 
 Explore the system to find additional users:
 
-![Exploring /home Directory for Other Users](Screenshot_2026-07-21_230108.png)
+![Exploring /home Directory for Other Users](13-ssh-authorized-keys.png)
 
 **Commands:**
 ```bash
@@ -252,7 +252,7 @@ us3r{F14g:tr5827r5wu6nklao}
 
 Examine the SSH directory of user "lily":
 
-![Authorized Keys Access](Screenshot_2026-07-21_221142.png)
+![Authorized Keys Access](14-authorized-keys-file.png)
 
 The authorized_keys file contains the public key for user "renu", allowing SSH access as "lily" without requiring a password.
 
@@ -267,7 +267,7 @@ ssh lily@127.0.0.1
 
 Determine what commands "lily" can run with elevated privileges:
 
-![Sudo Permissions for lily User](Screenshot_2026-07-21_221207.png)
+![Sudo Permissions for lily User](15-sudo-permissions-perl.png)
 
 **Command:**
 ```bash
@@ -286,7 +286,7 @@ The user "lily" can run Perl without a password as root—a dangerous privilege 
 
 Leverage Perl to execute a shell with root privileges:
 
-![Perl Privilege Escalation to Root](Screenshot_2026-07-21_221306.png)
+![Perl Privilege Escalation to Root](16-perl-privilege-escalation.png)
 
 **Exploit Command:**
 ```bash
@@ -305,7 +305,7 @@ id
 
 #### 5.1 Navigate to Root Directory
 
-![Root Flag Discovery](Screenshot_2026-07-21_221142.png)
+After escalating to root, navigate to the root home directory to find the final flag:
 
 **Commands:**
 ```bash
@@ -480,3 +480,4 @@ This CTF walkthrough is for **educational purposes only**. All techniques demons
 **Last Updated:** July 21, 2026  
 **Difficulty Rating:** ⭐⭐ Beginner to Intermediate  
 **Total Time to Complete:** ~16 minutes
+
